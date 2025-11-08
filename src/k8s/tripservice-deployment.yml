@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tripservice-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tripservice-app
+  template:
+    metadata:
+      labels:
+        app: tripservice-app
+    spec:
+      containers:
+      - name: tripservice
+        image: tripservice-app:latest
+        imagePullPolicy: Never
+        ports:
+          - containerPort: 8080
+        env:
+          - name: ASPNETCORE_ENVIRONMENT
+            valueFrom:
+              configMapKeyRef:
+                name: tripservice-config
+                key: ASPNETCORE_ENVIRONMENT
+          - name: ConnectionStrings__DefaultConnection
+            value: "Host=tripservice-db;Database=tripdb;Username=tripuser;Password=tripsecret"
+        readinessProbe:
+          httpGet:
+            path: /swagger/index.html
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /swagger/index.html
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"

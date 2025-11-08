@@ -1,0 +1,16 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\src",
+    "\\src\\bin",
+    "\\src\\Controllers",
+    "\\src\\Data",
+    "\\src\\Models",
+    "\\src\\obj",
+    "\\src\\TripService",
+    "\\src\\TripService\\obj",
+    "\\src\\TripService\\Properties"
+  ],
+  "SelectedNode": "\\src\\Models\\Trip.cs",
+  "PreviewInSolutionExplorer": false
+}

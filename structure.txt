@@ -1,0 +1,18 @@
+trip-service/
+│
+├── src/
+│   └── TripService/
+│       ├── Program.cs
+│       ├── Models/
+│       │   └── Trip.cs
+│       ├── Data/
+│       │   └── TripDbContext.cs
+│       ├── appsettings.json
+│       └── TripService.csproj
+│
+├── Dockerfile
+├── docker-compose.yml
+└── k8s/
+    ├── trip-deployment.yaml
+    ├── trip-service.yaml
+    └── postgres.yaml

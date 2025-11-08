@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tripservice-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tripservice-db
+  template:
+    metadata:
+      labels:
+        app: tripservice-db
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16
+        env:
+          - name: POSTGRES_DB
+            value: tripdb
+          - name: POSTGRES_USER
+            value: tripuser
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: tripservice-secret
+                key: DB_PASSWORD
+        ports:
+          - containerPort: 5432
+        volumeMounts:
+          - name: postgres-storage
+            mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc

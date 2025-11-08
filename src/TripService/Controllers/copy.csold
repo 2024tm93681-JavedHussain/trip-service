@@ -1,0 +1,216 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using TripService.Data;
+using TripService.Models;
+using Prometheus; // ✅ Metrics
+
+namespace TripService.Controllers
+{
+    [ApiController]
+    [Route("api/v1/trips")]
+    public class TripsController : ControllerBase
+    {
+        private readonly TripDbContext _context;
+
+        // ✅ Prometheus metrics
+        private static readonly Counter TripRequests = Metrics.CreateCounter(
+            "trip_requests_total",
+            "Number of trip API requests",
+            new CounterConfiguration { LabelNames = new[] { "endpoint", "method", "status" } }
+        );
+
+        private static readonly Histogram RequestDuration = Metrics.CreateHistogram(
+            "trip_request_duration_seconds",
+            "Request duration in seconds",
+            new HistogramConfiguration { LabelNames = new[] { "endpoint", "method" } }
+        );
+
+        public TripsController(TripDbContext context)
+        {
+            _context = context;
+        }
+
+        // GET: api/v1/trips
+        [HttpGet]
+        public async Task<IActionResult> GetAllTrips()
+        {
+            using (RequestDuration.WithLabels("get_all_trips", "GET").NewTimer())
+            {
+                var trips = await _context.Trips.ToListAsync();
+                TripRequests.WithLabels("get_all_trips", "GET", "200").Inc();
+                return Ok(trips);
+            }
+        }
+
+        // GET: api/v1/trips/{id}
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetTrip(int id)
+        {
+            using (RequestDuration.WithLabels("get_trip", "GET").NewTimer())
+            {
+                var trip = await _context.Trips.FindAsync(id);
+                if (trip == null)
+                {
+                    TripRequests.WithLabels("get_trip", "GET", "404").Inc();
+                    return NotFound();
+                }
+
+                TripRequests.WithLabels("get_trip", "GET", "200").Inc();
+                return Ok(trip);
+            }
+        }
+
+        // POST: api/v1/trips
+        [HttpPost]
+        public async Task<IActionResult> CreateTrip([FromBody] CreateTripRequest request)
+        {
+            using (RequestDuration.WithLabels("create_trip", "POST").NewTimer())
+            {
+                if (request == null)
+                {
+                    TripRequests.WithLabels("create_trip", "POST", "400").Inc();
+                    return BadRequest("Invalid request.");
+                }
+
+                var trip = new Trip
+                {
+                    PickupZone = request.PickupZone,
+                    DropZone = request.DropZone,
+                    BaseFare = request.BaseFare ?? 0m,
+                    DistanceKm = request.DistanceKm ?? 0m,
+                    Status = "REQUESTED",
+                    RequestedAt = DateTime.UtcNow,
+                    RiderId = request.RiderId
+                };
+
+                _context.Trips.Add(trip);
+                await _context.SaveChangesAsync();
+
+                TripRequests.WithLabels("create_trip", "POST", "201").Inc();
+                return CreatedAtAction(nameof(GetTrip), new { id = trip.TripId }, trip);
+            }
+        }
+
+        [HttpPost("{id}/assign")]
+        public async Task<IActionResult> AssignDriver(int id, [FromBody] AssignDriverRequest request)
+        {
+            using (RequestDuration.WithLabels("assign_driver", "POST").NewTimer())
+            {
+                var trip = await _context.Trips.FindAsync(id);
+                if (trip == null)
+                    return NotFound(new { message = "Trip not found" });
+
+                if (trip.Status != "REQUESTED" && trip.Status != "ASSIGNED")
+                    return Conflict(new { message = "Trip cannot be assigned in current state" });
+
+                trip.DriverId = request.DriverId;
+                trip.Status = "ASSIGNED";
+                await _context.SaveChangesAsync();
+                return Ok(trip);
+            }
+        }
+
+        [HttpPost("{id}/accept")]
+        public async Task<IActionResult> AcceptTrip(int id, [FromBody] DriverActionRequest request)
+        {
+            using (RequestDuration.WithLabels("accept_trip", "POST").NewTimer())
+            {
+                var trip = await _context.Trips.FindAsync(id);
+                if (trip == null)
+                    return NotFound(new { message = "Trip not found" });
+
+                if (trip.Status != "ASSIGNED" && trip.Status != "REQUESTED")
+                    return Conflict(new { message = "Trip cannot be accepted" });
+
+                if (trip.DriverId != null && trip.DriverId != request.DriverId)
+                    return Conflict(new { message = "Trip assigned to another driver" });
+
+                trip.DriverId = request.DriverId;
+                trip.Status = "ACCEPTED";
+                await _context.SaveChangesAsync();
+                return Ok(trip);
+            }
+        }
+
+        [HttpPost("{id}/start")]
+        public async Task<IActionResult> StartTrip(int id, [FromBody] DriverActionRequest request)
+        {
+            using (RequestDuration.WithLabels("start_trip", "POST").NewTimer())
+            {
+                var trip = await _context.Trips.FindAsync(id);
+                if (trip == null)
+                    return NotFound();
+
+                if (trip.Status != "ACCEPTED")
+                    return Conflict(new { message = "Trip cannot be started" });
+
+                trip.Status = "ONGOING";
+                await _context.SaveChangesAsync();
+                return Ok(trip);
+            }
+        }
+
+        [HttpPost("{id}/complete")]
+        public async Task<IActionResult> CompleteTrip(int id, [FromBody] CompleteTripRequest request)
+        {
+            using (RequestDuration.WithLabels("complete_trip", "POST").NewTimer())
+            {
+                var trip = await _context.Trips.FindAsync(id);
+                if (trip == null)
+                    return NotFound();
+
+                if (trip.Status != "ONGOING")
+                    return Conflict(new { message = "Trip not in progress" });
+
+                trip.DistanceKm = request.DistanceKm ?? trip.DistanceKm;
+                trip.Status = "COMPLETED";
+
+                var perKmRate = 10m;
+                var total = trip.BaseFare + (trip.DistanceKm * perKmRate * trip.SurgeMultiplier);
+                trip.TotalFare = total;
+
+                await _context.SaveChangesAsync();
+                return Ok(trip);
+            }
+        }
+
+        [HttpPost("{id}/cancel")]
+        public async Task<IActionResult> CancelTrip(int id, [FromBody] CancelTripRequest request)
+        {
+            using (RequestDuration.WithLabels("cancel_trip", "POST").NewTimer())
+            {
+                var trip = await _context.Trips.FindAsync(id);
+                if (trip == null)
+                    return NotFound();
+
+                if (trip.Status == "COMPLETED" || trip.Status == "CANCELLED")
+                    return Conflict(new { message = "Trip cannot be cancelled" });
+
+                trip.Status = "CANCELLED";
+                await _context.SaveChangesAsync();
+                return Ok(trip);
+            }
+        }
+
+        [HttpPost("{id}/charge-result")]
+        public async Task<IActionResult> PaymentResult(int id, [FromBody] PaymentResultRequest request)
+        {
+            using (RequestDuration.WithLabels("payment_result", "POST").NewTimer())
+            {
+                var trip = await _context.Trips.FindAsync(id);
+                if (trip == null)
+                    return NotFound();
+
+                await _context.SaveChangesAsync();
+                return Ok(trip);
+            }
+        }
+    }
+
+    // ✅ DTOs (unchanged)
+    public class AssignDriverRequest { public int DriverId { get; set; } }
+    public class DriverActionRequest { public int DriverId { get; set; } }
+    public class CompleteTripRequest { public decimal? DistanceKm { get; set; } }
+    public class CancelTripRequest { public string? Reason { get; set; } }
+    public class PaymentResultRequest { public string PaymentId { get; set; } = string.Empty; public string Status { get; set; } = string.Empty; }
+}
