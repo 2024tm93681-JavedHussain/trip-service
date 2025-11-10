@@ -1,178 +1,134 @@
-Trip Service – Ride-Hailing Platform
+🚖 Trip Service – Ride-Hailing Platform
+📘 Overview
 
-Description:
-The Trip Service is a microservice responsible for managing the complete trip lifecycle in a ride-hailing platform — including trip creation, driver assignment, acceptance, completion, and fare calculation. It acts as one of the core components of the overall dispatch system.
+The Trip Service is a core microservice within a ride-hailing platform responsible for managing the entire trip lifecycle — from trip creation to completion and fare calculation. It integrates with other platform components such as the Driver Service and Payment Service, ensuring seamless end-to-end trip management.
 
-Table of Contents
+Key Responsibilities
 
-Overview
+Handle trip requests from riders.
 
-Features
+Automatically assign available drivers.
 
-API Endpoints
+Manage trip acceptance and completion.
 
-Prerequisites
+Calculate fares and trigger payments.
 
-Docker and Local Development
+Provide trip status and details through APIs.
 
-Kubernetes Deployment
+The service is built using .NET Web API, uses PostgreSQL as its database, and is containerized using Docker for deployment in Kubernetes clusters.
 
-Configuration
+✨ Features
 
-Manifests
+🆕 Create a new trip (initial status: REQUESTED)
 
-Deployment Steps
+🚗 Automatically assign drivers via Driver Service
 
-Metrics and Monitoring
+✅ Accept trips and update status to ACCEPTED
 
-Troubleshooting
+🏁 Complete trips, calculate fares, and update status to COMPLETED
 
-License
+📈 Prometheus metrics integration for performance monitoring
 
-1. Overview
+🐳 Fully compatible with Docker and Kubernetes
 
-The Trip Service handles all critical workflows in a ride-hailing system:
+🧩 API Endpoints
+Endpoint	Method	Description	Request Body
+/api/v1/trips	POST	Create a new trip	{ "riderId": int, "pickupZone": string, "dropZone": string, "baseFare": decimal, "distanceKm": decimal }
+/api/v1/trips/{id}/accept	POST	Accept a trip	{ "driverId": int }
+/api/v1/trips/{id}/complete	POST	Complete a trip and calculate fare	{ "distanceKm": decimal }
+/api/v1/trips/{id}	GET	Retrieve trip details	–
 
-A rider requests a trip.
+All requests and responses use JSON format.
 
-The service automatically assigns an available driver (via the Driver Service).
-
-The driver accepts the trip, and the trip status is updated to ACCEPTED.
-
-Upon completion, the fare is calculated and payment is triggered.
-
-Trips can be queried by ID to retrieve their details or current status.
-
-The service is built with .NET Web API, uses PostgreSQL as the database, and is containerized using Docker for deployment on Kubernetes clusters.
-
-2. Features
-
-Create a new trip request (initial status: REQUESTED).
-
-Automatically assign drivers from the Driver Service.
-
-Accept trips and update their status to ACCEPTED.
-
-Complete trips, calculate fares, and update status to COMPLETED.
-
-Integrated Prometheus metrics for monitoring.
-
-Fully compatible with Docker and Kubernetes environments.
-
-3. API Endpoints
-Endpoint	Method	Description
-POST /api/v1/trips	Create a new trip	Request Body: { "riderId": int, "pickupZone": string, "dropZone": string, "baseFare": decimal, "distanceKm": decimal }
-POST /api/v1/trips/{id}/accept	Accept a trip	Request Body: { "driverId": int }
-POST /api/v1/trips/{id}/complete	Complete a trip and calculate fare	Request Body: { "distanceKm": decimal }
-GET /api/v1/trips/{id}	Retrieve trip details	–
-
-All API requests and responses use JSON format.
-
-4. Prerequisites/Tech Stack
+🧱 Prerequisites / Tech Stack
 
 .NET 6, 7, or 8 SDK
 
-Docker Desktop 
+Docker Desktop
 
 Kubernetes
 
-Minikube (for local deployment and testing)
+Minikube (for local cluster testing)
 
-PostgreSQL database
+PostgreSQL
 
-Prometheus for monitoring
+Prometheus (for metrics collection)
 
-5. Docker and Local Development
-
-Step 1 – Build the Docker image
-
+🐳 Docker and Local Development
+Step 1 – Build the Docker Image
 docker build -t tripservice-app:latest .
 
+Step 2 – Run Locally
 
-Step 2 – Run locally (assuming PostgreSQL is running locally)
+(Ensure PostgreSQL is running locally)
 
 docker run -p 5000:8080 \
   -e ConnectionStrings__Default="Host=localhost;Database=tripdb;Username=tripuser;Password=tripsecret" \
   tripservice-app
 
-
 Step 3 – Test the API
 
-Use Postman or Curl to test:
+You can test using Postman or cURL:
 
 http://localhost:5000/api/v1/trips
 
-6. Kubernetes Deployment
+☸️ Kubernetes Deployment
 Configuration
 
-Configuration is handled using:
+The service uses:
 
-ConfigMap – for environment variables (e.g., ASPNETCORE_ENVIRONMENT).
+ConfigMap – Environment configuration (ASPNETCORE_ENVIRONMENT)
 
-Secret – for storing sensitive credentials such as the database password.
+Secret – Secure storage for sensitive credentials (e.g., DB password)
 
-PersistentVolumeClaim (PVC) – for PostgreSQL data persistence.
+PersistentVolumeClaim (PVC) – For PostgreSQL data persistence
 
-Services Deployed:
+Services Deployed
 
 tripservice (ClusterIP or NodePort)
 
 tripservice-db (PostgreSQL)
 
-Both the Trip Service and PostgreSQL are deployed as separate pods.
+Both services run as separate Pods in the cluster.
 
-Manifests
+📁 Manifests Directory
 
-All Kubernetes manifest files are located under the ./k8s/ directory:
+All Kubernetes YAML files are located under the ./k8s/ directory:
 
-tripservice-deployment.yml
+k8s/
+├── tripservice-deployment.yml
+├── tripservice-service.yml
+├── trip-configmap.yml
+├── trip-secret.yml
+├── postgres-deployment.yml
+├── postgres-service.yml
+└── postgres-pvc.yml
 
-tripservice-service.yml
-
-trip-configmap.yml
-
-trip-secret.yml
-
-postgres-deployment.yml
-
-postgres-service.yml
-
-postgres-pvc.yml
-
-Deployment Steps
-
-Switch Docker context to the cluster
-For Minikube:
-
-On Windows Command Prompt
+🚀 Deployment Steps
+1. Start Minikube
 minikube start
 
+2. Set Docker Context
 minikube docker-env
 
-Build the image inside the cluster
-
+3. Build Image Inside Cluster
 docker build -t tripservice-app:latest .
 
-
-Apply all manifests
-
+4. Apply All Manifests
 kubectl apply -f k8s/
 
-
-Verify deployment status
-
+5. Verify Deployment
 kubectl get deployments
 kubectl get pods
 kubectl get svc
 
-
-Access the service
+6. Access the Service
 
 If using NodePort or Ingress:
 
 minikube service tripservice --url
 
-Environment Variables (Deployment)
+🌍 Environment Variables (Example)
 env:
   - name: ASPNETCORE_ENVIRONMENT
     value: "Production"
@@ -180,47 +136,33 @@ env:
     value: "Host=tripservice-db;Database=tripdb;Username=tripuser;Password=tripsecret"
 
 
-Note:
+Notes:
 
-Local DB is named tripdb.
+Local DB: tripdb
 
-The PostgreSQL container in Docker/Kubernetes uses the service name tripservice-db.
+PostgreSQL service: tripservice-db
 
-The application image is named tripservice-app.
+Docker/Kubernetes image: tripservice-app
 
-7. Metrics and Monitoring
+📊 Metrics and Monitoring
 
-Monitoring is integrated using prometheus-net.AspNetCore.
-The /metrics endpoint is exposed by default for Prometheus to scrape.
+The service exposes Prometheus metrics via the /metrics endpoint using the prometheus-net.AspNetCore package.
 
-Custom metrics include:
-
-trip_created_total
-
-trip_accepted_total
-
-trip_completed_total
-
-Example Prometheus scrape configuration:
-
+Custom Metrics
+Metric Name	Description
+trip_created_total	Total number of trips created
+trip_accepted_total	Total number of trips accepted
+trip_completed_total	Total number of trips completed
+Example Prometheus Scrape Config
 scrape_configs:
   - job_name: 'tripservice'
     static_configs:
       - targets: ['tripservice.default.svc.cluster.local:8080']
 
-8. Troubleshooting
+🧰 Troubleshooting
 
-Ensure Docker and Kubernetes contexts are correctly configured before deploying.
+✅ Verify Docker and Kubernetes contexts before deployment.
 
-Check logs using:
+🔍 Check logs for issues:
 
 kubectl logs <pod-name>
-
-
-If connection issues occur, verify that:
-
-The tripservice-db service is reachable.
-
-Environment variables are correctly set.
-
-Database credentials in Secret and connection string match.
